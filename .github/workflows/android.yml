@@ -1,0 +1,68 @@
+name: Build Sonic EXE 2.5 Android
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager "platform-tools"
+          sdkmanager "platforms;android-31"
+          sdkmanager "build-tools;31.0.0"
+          yes | sdkmanager --licenses || true
+
+      - name: Setup Haxe
+        uses: krdlab/setup-haxe@v1
+        with:
+          haxe-version: '4.2.5'
+
+      - name: Setup Haxelib
+        run: |
+          haxelib setup ~/haxelib
+
+      - name: Install Haxe libraries
+        run: |
+          haxelib install lime
+          haxelib install openfl
+          haxelib install flixel
+          haxelib install flixel-addons
+          haxelib install flixel-ui
+          haxelib install hscript
+          haxelib install linc_luajit
+          haxelib run lime setup
+
+      - name: Build Android APK
+        run: |
+          haxelib run lime build android -release
+
+      - name: Find APK
+        run: |
+          find export -type f -name "*.apk" -print
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sonic-EXE-2.5-Android
+          path: |
+            export/**/*.apk
+          if-no-files-found: error
