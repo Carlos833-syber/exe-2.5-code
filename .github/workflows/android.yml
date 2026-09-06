@@ -8,19 +8,21 @@ on:
 
 jobs:
   android:
+    name: Build Android APK
     runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Android SDK atualmente exige JDK 17+
+      # Android atualmente precisa de Java 17+
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      # Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
@@ -30,14 +32,14 @@ jobs:
           sdkmanager "platforms;android-31"
           sdkmanager "build-tools;31.0.0"
           sdkmanager "ndk;21.4.7075529"
-          yes | sdkmanager --licenses
+          yes | sdkmanager --licenses || true
 
       - name: Configure Android environment
         run: |
           echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/21.4.7075529" >> "$GITHUB_ENV"
 
-      # Haxe usado pelo projeto antigo
+      # Haxe
       - name: Setup Haxe
         uses: krdlab/setup-haxe@v1
         with:
@@ -47,6 +49,7 @@ jobs:
         run: |
           haxelib setup ~/haxelib
 
+      # Bibliotecas utilizadas pelo projeto
       - name: Install Haxe libraries
         run: |
           haxelib install lime 7.9.0
@@ -61,4 +64,76 @@ jobs:
         run: |
           haxelib set lime 7.9.0
           haxelib set openfl 9.1.0
-          haxelib set flixel 4.11
+          haxelib set flixel 4.11.0
+          haxelib set flixel-addons 2.10.0
+          haxelib set flixel-ui 2.5.0
+          haxelib set hscript 2.4.0
+
+      # Configuração do Lime para Android
+      - name: Setup Lime
+        run: |
+          haxelib run lime setup
+          haxelib run lime setup android
+
+      # Corrige o aviso fps=""
+      - name: Fix Project.xml FPS
+        run: |
+          sed -i 's/fps=""/fps="60"/' Project.xml
+
+      # Mostra as versões para facilitar diagnóstico
+      - name: Check environment
+        run: |
+          echo "===== JAVA ====="
+          java -version
+
+          echo "===== HAXE ====="
+          haxe --version
+
+          echo "===== ANDROID SDK ====="
+          echo "$ANDROID_SDK"
+
+          echo "===== ANDROID NDK ====="
+          echo "$ANDROID_NDK_ROOT"
+
+          echo "===== HAXELIB ====="
+          haxelib list
+
+      # Compilação
+      - name: Build Android APK
+        run: |
+          haxelib run lime build android -release
+
+      # Procura o APK em qualquer pasta
+      - name: Find APK
+        run: |
+          echo "================================"
+          echo "PROCURANDO APK..."
+          echo "================================"
+
+          find . -type f -name "*.apk" -print
+
+          echo "================================"
+          echo "PROCURANDO AAB..."
+          echo "================================"
+
+          find . -type f -name "*.aab" -print
+
+      # Cria uma pasta somente para os arquivos finais
+      - name: Prepare APK
+        run: |
+          mkdir -p android-build
+
+          find . -type f -name "*.apk" -exec cp {} android-build/ \;
+          find . -type f -name "*.aab" -exec cp {} android-build/ \;
+
+          echo "===== ARQUIVOS FINAIS ====="
+          ls -lah android-build
+
+      # Upload para Actions > Artifacts
+      - name: Upload Android build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sonic-EXE-2.5-Android
+          path: android-build/
+          if-no-files-found: error
+          retention-days: 30
